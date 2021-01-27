@@ -1,16 +1,18 @@
 import json
 import re
 from enum import Enum
-from itertools import tee
-from typing import List, Any
+from itertools import tee, dropwhile
+from operator import attrgetter
+from typing import List, Any, Union
 
+import pymorphy2
 from pydantic import BaseModel, constr, ValidationError, conint
 from devtools import debug
 from pydantic.error_wrappers import flatten_errors
 
 
 class RequestData(BaseModel):
-	sentence: constr(min_length=2)#, regex=re.compile(r''))
+	sentence: constr(min_length=1, regex=re.compile(r'^(?:[а-яА-Я]+|[0-9]+)(?:[\s.,:!&;\'"-%\(\)](?:[а-яА-Я]+|[0-9]+)?)*$'))
 
 
 Status = Enum('Status', zip(*tee('ok error'.split(' '))), module=__name__, type=str)
@@ -27,6 +29,25 @@ class ResponseError(BaseModel):
 	description: Any
 
 
+splitter = re.compile(r'([а-яА-Я]+|[0-9]+)')
+morph = pymorphy2.MorphAnalyzer()
+
+
+def handler(request: RequestData) -> Union[ResponseData, ResponseError]:
+	_, *pairs = splitter.split(request.sentence)
+	count = len(pairs) / 2
+	first = pairs[0]
+
+	term = next(dropwhile(lambda p: p.tag.POS not in {'NOUN', 'ADJF', 'PRTF', 'NUMR', 'NPRO'}, morph.parse(first)), None)
+	if not term:
+		return ResponseError(description="I'm a teapot too.")
+
+	return ResponseData(
+		declined_word=list(map(attrgetter('word'), term.lexeme)),
+		num_words=count
+	)
+
+
 def response(start_response, status: str, data: BaseModel):
 	body = data.json(ensure_ascii=False).encode('utf-8')
 	headers = (
@@ -35,14 +56,6 @@ def response(start_response, status: str, data: BaseModel):
 	)
 	start_response(status, headers)
 	return body,
-
-
-def handler(request: RequestData) -> BaseModel:
-	words = request.sentence.split(' ')
-	result = ResponseData(
-		status=Status.ok, declined_word=[words[0]], num_words=len(words)
-	)
-	return result
 
 
 def application(environ, start_response):

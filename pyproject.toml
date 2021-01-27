@@ -10,10 +10,12 @@ pymorphy2 = "^0.9.1"
 pymorphy2-dicts-ru = "^2.4.417127"
 gunicorn = "^20.0.4"
 pydantic = "^1.7.3"
+num2t4ru = {git = "https://github.com/seriyps/ru_number_to_text.git", rev = "3b9ccdb36bb744341ee7bec9c50b51198259c648"}
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.19.0"
 jedi = "~=0.17.2"
+pytest = "^6.2.2"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
