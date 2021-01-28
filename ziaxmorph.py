@@ -1,4 +1,3 @@
-import json
 import re
 from enum import Enum
 from itertools import tee, dropwhile
@@ -6,13 +5,17 @@ from operator import attrgetter
 from typing import List, Any, Union
 
 import pymorphy2
+from num2t4ru import num2text
 from pydantic import BaseModel, constr, ValidationError, conint
-from devtools import debug
 from pydantic.error_wrappers import flatten_errors
 
 
+WORD = r'[а-яА-Я]+'
+DIGIT = r'-?[0-9]+'
+
+
 class RequestData(BaseModel):
-	sentence: constr(min_length=1, regex=re.compile(r'^(?:[а-яА-Я]+|[0-9]+)(?:[\s.,:!&;\'"-%\(\)](?:[а-яА-Я]+|[0-9]+)?)*$'))
+	sentence: constr(min_length=1, regex=re.compile(fr'^(?:{WORD}|{DIGIT})(?:[\s.,:!&;\'"-%\(\)](?:{WORD}|{DIGIT})?)*$'))
 
 
 Status = Enum('Status', zip(*tee('ok error'.split(' '))), module=__name__, type=str)
@@ -29,7 +32,7 @@ class ResponseError(BaseModel):
 	description: Any
 
 
-splitter = re.compile(r'([а-яА-Я]+|[0-9]+)')
+splitter = re.compile(fr'({WORD}|{DIGIT})')
 morph = pymorphy2.MorphAnalyzer()
 
 
@@ -38,9 +41,14 @@ def handler(request: RequestData) -> Union[ResponseData, ResponseError]:
 	count = len(pairs) / 2
 	first = pairs[0]
 
-	term = next(dropwhile(lambda p: p.tag.POS not in {'NOUN', 'ADJF', 'PRTF', 'NUMR', 'NPRO'}, morph.parse(first)), None)
+	declined_parts_of_speech = {'NOUN', 'ADJF', 'PRTF', 'NUMR', 'NPRO'}
+	parsed = morph.parse(first)
+	term = next(dropwhile(lambda p: p.tag.POS not in declined_parts_of_speech, parsed), None)
 	if not term:
-		return ResponseError(description="I'm a teapot too.")
+		if 'NUMB' in parsed[0].tag:
+			term = morph.parse(num2text(int(parsed[0].word)))[0]
+		else:
+			return ResponseError(description="I'm a teapot too.")
 
 	return ResponseData(
 		declined_word=list(map(attrgetter('word'), term.lexeme)),
