@@ -11,7 +11,7 @@ from pydantic.error_wrappers import flatten_errors
 
 
 WORD = r'[а-яА-Я]+'
-DIGIT = r'-?[0-9]+'
+DIGIT = r'[0-9]+'
 
 
 class RequestData(BaseModel):
@@ -70,13 +70,13 @@ def application(environ, start_response):
 	if environ['PATH_INFO'] != '/':
 		return response(start_response, '404 Not Found', ResponseError(description='not found'))
 
-	if environ['CONTENT_TYPE'] != 'application/json':
+	if environ.get('CONTENT_TYPE') != 'application/json':
 		return response(start_response, '400 Bad Request', ResponseError(description='wrong content type'))
 
-	if environ['HTTP_KEY'] != 'ziax':
+	if environ.get('HTTP_KEY') != 'ziax':
 		return response(start_response, '401 Unauthorized', ResponseError(description='not allowed'))
 
-	# XXX: what is the way to handle variable content length of body (I forget name of such encoding of http message).
+	# XXX: what is the way to handle variable content length of body (I forget name of such encoding of http message, "chunk" may be?).
 	try:
 		request_body_size = int(environ.get('CONTENT_LENGTH', 0))
 	except ValueError:
